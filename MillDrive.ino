@@ -6,22 +6,52 @@
  * 12 ipm = 1200 RPM
  */
 
-#include "myStepper.h"
+#include <Arduino.h>
+#include "A4988.h"
 #include "debugprint.h"
 
+//
 // Pin Definitions
+//
+
+// Status
 #define BUZZER_PIN 10
 #define LED_PIN    13
+
+// Controls
 #define SPEED_PIN  A9
 #define FWD_PIN    A0
 #define REV_PIN    A1
 #define START_PIN  A2
 
+// Motor Driver
+
+#define MC_PIN_DIR               2
+#define MC_PIN_STEP              3
+#define MC_PIN_SLEEP             4
+#define MC_PIN_RESET             5
+#define MC_PIN_MS3               6
+#define MC_PIN_MS2               7
+#define MC_PIN_MS1               8
+#define MC_PIN_ENABLE            9
+
+//
 // Constants
+//
+
+#define MC_STEP_FULL             1
+#define MC_STEP_HALF             2
+#define MC_STEP_QUARTER          3
+#define MC_STEP_EIGHTH           4
+#define MC_STEP_SIXTEENTH        5
+#define MC_DIR_REV               0
+#define MC_DIR_FWD               1
+
 #define SLEEP_TIME     1000
 #define SAMPLE_TIMER   500
 #define DEBOUNCE_TIME  250
 #define AVG_LIST_LEN   5
+#define MOTOR_STEPS    200
 #define RPM_MIN        20
 #define RPM_MAX        260
 
@@ -34,6 +64,8 @@ uint32_t waitTime       = 0;
 uint32_t debounceTimer  = 0;
 uint32_t speedSampleTimer = 0;
 int avgList[AVG_LIST_LEN];
+
+A4988 theMotor(MOTOR_STEPS, MC_PIN_DIR, MC_PIN_STEP, MC_PIN_ENABLE, MC_PIN_MS1, MC_PIN_MS2, MC_PIN_MS3);
 
 void setup() {
   Serial.begin(115200);
@@ -57,14 +89,11 @@ void setup() {
   beep(100);
 
   // Set up the motor...
-  theMotor.begin();
-  theMotor.setStepType(MC_STEP_FULL);
+  theMotor.setMicrostep(MC_STEP_EIGHTH);
+  theMotor.setRPM(200);
 
   // All done!
   beep(100);
-
-  // Speed debugging cruft...
-  //theMotor.moveNow();
 }
 
 void beep(int duration) {
@@ -147,43 +176,6 @@ void handleControls()
   }
 }
 
-void handleMotor ()
-{
-  if ( moveEnabled ) {
-
-    // Set the motor speed
-    if ( oldSpeed != speedKnob ) {
-      theMotor.setSpeed(map(speedKnob, 1, 1023, RPM_MIN, RPM_MAX));
-      oldSpeed = speedKnob;
-    }
-  
-    if ( ! theMotor.getCanMove() ) {
-
-      //theMotor.setSpeed(map(speedKnob, 1, 1023, RPM_MIN, RPM_MAX));
-
-      // Set the motor direction
-      switch ( moveDir ) {
-        case MC_DIR_FWD:
-          theMotor.setReverse(false);
-          break;
-        case MC_DIR_REV:
-          theMotor.setReverse(true);
-          break;
-        default:
-          debugprint(DEBUG_ERROR, "Invalid direction: %d", moveDir);
-          break;
-      }
-  
-      // Start the motor moving
-      theMotor.moveNow();
-    }
-  }
-  else {
-    if ( theMotor.getIsMoving() )
-      theMotor.stopNow();
-  }
-}
-
 void debugOutput()
 {
   if ( millis() > waitTime ) {
@@ -204,7 +196,7 @@ void debugOutput()
         break;
     }
 
-    theMotor.dumpDebug();
+    //theMotor.dumpDebug();
 
     waitTime = millis() + SLEEP_TIME;
   }
@@ -222,11 +214,16 @@ void loop() {
   delay(250);
 */  
 
-  handleControls();
+  //handleControls();
 
-  debugOutput();
+  //debugOutput();
 
-  handleMotor();
+  unsigned turns = MOTOR_STEPS * theMotor.getMicrostep();
+  
+  theMotor.move(turns);
+  delay(500);
+  theMotor.move(turns * -1);
+  delay(500);
 
 }
 
